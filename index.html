@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>12 Gyakorlat – edzéskártyák (Pro: időzítő + video + lazy)</title>
+<style>
+  :root{
+    --bg:#f7f9fc; --card:#ffffff; --ink:#1d2433; --muted:#5b6376; --accent:#0b74ff;
+    --shadow:0 6px 20px rgba(0,0,0,.08);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0; background:var(--bg); color:var(--ink); font:16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, "Apple Color Emoji","Segoe UI Emoji";}
+  a{color:inherit; text-decoration:none}
+  img{max-width:100%; height:auto; display:block}
+
+  /* Layout */
+  .wrap{display:grid; grid-template-columns:280px 1fr; gap:16px; align-items:start}
+  aside{
+    position:sticky; top:0; height:100vh; overflow:auto; padding:14px; background:#fff; border-right:1px solid #e7edf6;
+  }
+  main{padding:24px}
+  .grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:16px}
+
+  /* TOC */
+  .toc{list-style:none; margin:0; padding:0}
+  .toc li{margin:2px 0}
+  .toc a{display:block; padding:8px 10px; border:1px solid #e7edf6; border-radius:10px}
+  .toc a:hover{background:#f2f6ff}
+  .toc a.active{background:#e9f2ff; border-color:#c8defe; color:#0b74ff; font-weight:600}
+  .toc .sublist{margin:4px 0 8px 16px; list-style:none; padding-left:0}
+  .toc .sublist a{font-size:14px; opacity:.95}
+
+  /* Cards */
+  .exercise{background:var(--card); border:1px solid #e7edf6; border-radius:14px; padding:14px; box-shadow:var(--shadow); cursor:pointer}
+  .exercise h2{margin:0 0 8px 0; font-size:18px}
+  .exercise p, .exercise li{margin:6px 0}
+  .exercise ul{padding-left:18px}
+  .exercise img, .exercise video{border-radius:12px; margin-bottom:10px; background:#000}
+  .notes{margin-top:8px}
+  .note{margin-top:16px; color:var(--muted)}
+
+  /* Lightbox */
+  .lightbox{position:fixed; inset:0; display:none; place-items:center; background:rgba(0,0,0,.82); z-index:9999; padding:24px}
+  .lightbox.open{display:grid}
+  .lightbox-content{position:relative; z-index:1; max-width:1000px; width:min(1000px,95vw); max-height:90vh; overflow:auto; background:#fff; border-radius:14px; padding:16px}
+  .lightbox img{margin:auto; display:block; max-width:95vw; max-height:90vh}
+  .lb-close{position:absolute; top:14px; right:14px; border:1px solid #e7edf6; background:#fff; border-radius:10px; padding:6px 10px; cursor:pointer}
+  .lb-nav{position:absolute; top:50%; left:0; right:0; transform:translateY(-50%); display:flex; gap:8px; z-index:2; pointer-events:none}
+  #cardPrev,#imgPrev{left:10px; position:absolute} #cardNext,#imgNext{right:10px; position:absolute}
+  .lb-nav button{border:1px solid #e7edf6; background:#fff; border-radius:10px; padding:8px 10px; cursor:pointer; pointer-events:auto}
+
+  /* Toolbar */
+  .toolbar{display:flex; gap:8px; margin-bottom:10px; align-items:center}
+  .toolbar input{flex:1; padding:6px 10px; border:1px solid #ccd3e0; border-radius:8px}
+  .toolbar button{border:1px solid #ccd3e0; border-radius:8px; padding:6px 10px; background:#fff; cursor:pointer}
+
+  /* Print */
+  @media print{
+    aside{display:none}
+    .wrap{grid-template-columns:1fr}
+    .exercise{break-inside:avoid}
+    .lightbox{display:none!important}
+  }
+
+  /* Dark mode */
+  body[data-theme="dark"]{--bg:#0f1115; --card:#171923; --ink:#e6e6e6; --muted:#a8b0c2; --accent:#5ca3ff}
+  body[data-theme="dark"] aside{background:#141725; border-color:#252a3a; box-shadow:none}
+  body[data-theme="dark"] .exercise{box-shadow:none}
+  body[data-theme="dark"] .toc a:hover, body[data-theme="dark"] .toc a.active{background:#1e2a3e; border-color:#2b3c57}
+  body[data-theme="dark"] .lightbox-content{background:#141725; color:#e6e6e6}
+  body[data-theme="dark"] .lb-close{background:#141725; color:#e6e6e6; border-color:#2b2f43}
+
+  /* === Időzítő panel (lebegő) === */
+  .timer-toggle{position:fixed; left:20px; bottom:20px; z-index:10000; background:var(--accent); color:#fff; border:none; border-radius:999px; padding:10px 14px; font-size:16px; box-shadow:var(--shadow); cursor:pointer}
+  .timer-panel{position:fixed; left:20px; bottom:70px; z-index:10000; width:320px; max-width:calc(100vw - 40px); background:var(--card); color:var(--ink); border:1px solid #dfe6f2; border-radius:14px; box-shadow:var(--shadow); display:none; overflow:hidden}
+  .timer-panel.open{display:block}
+  .timer-header{display:flex; gap:6px; padding:8px; border-bottom:1px solid #e7edf6; overflow:auto}
+  .timer-tab{flex:1 0 auto; padding:6px 10px; border:1px solid #ccd3e0; border-radius:8px; background:#fff; cursor:pointer; font-size:14px}
+  .timer-tab.active{background:#e9f2ff; border-color:#c8defe; color:#0b74ff; font-weight:600}
+  .timer-body{padding:10px; display:none}
+  .timer-body.active{display:block}
+  .timer-row{display:flex; gap:8px; margin:6px 0}
+  .timer-row label{flex:1; font-size:13px; color:var(--muted)}
+  .timer-row input{width:80px; padding:6px 8px; border:1px solid #ccd3e0; border-radius:8px}
+  .timer-controls{display:flex; gap:8px; margin-top:8px}
+  .timer-controls button{flex:1; padding:8px 10px; border:1px solid #ccd3e0; border-radius:8px; background:#fff; cursor:pointer}
+  .timer-display{font:700 28px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align:center; margin:6px 0}
+  .rounds{font-size:13px; color:var(--muted); text-align:center}
+
+  /* Two-column grid fix */
+  @media (min-width: 900px){
+    .grid{ grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  }
+  @media (max-width: 899.98px){
+    .grid{ grid-template-columns: 1fr !important; }
+  }
+
+
+  /* Density presets */
+  :root { --gap:16px; --card-pad:14px; --font-base:16px; --title-size:18px; --card-min:380px; }
+  body[data-density="compact"] { --gap:12px; --card-pad:12px; --font-base:15px; --title-size:17px; --card-min:320px; }
+  body[data-density="normal"]  { --gap:16px; --card-pad:14px; --font-base:16px; --title-size:18px; --card-min:380px; }
+  body[data-density="cozy"]    { --gap:22px; --card-pad:18px; --font-base:18px; --title-size:20px; --card-min:440px; }
+  .grid{ gap: var(--gap); }
+  body{ font-size: var(--font-base); }
+  .exercise{ padding: var(--card-pad); }
+  .exercise h2{ font-size: var(--title-size); }
+  @media (min-width: 900px){
+    .exercise{ min-height: var(--card-min); }
+  }
+
+
+  /* Wake Lock styles */
+  #wakeToggle{ border:1px solid #ccd3e0; border-radius:8px; padding:6px 10px; background:#fff; cursor:pointer }
+  #wakeToggle.active{ background:#e9f8e1; border-color:#b4e4a5 }
+  body[data-theme="dark"] #wakeToggle{ background:#171923; color:#e6e6e6; border-color:#2b2f43 }
+  body[data-theme="dark"] #wakeToggle.active{ background:#1f2d1f; border-color:#254a25 }
+</style>
+
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b74ff">
+<!-- iOS PWA -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Edzés">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
+
+</head>
+<body data-density="cozy">
+
+<div class="wrap">
+  <aside>
+    <div class="toolbar">
+      <button id="themeToggle" title="Sötét/Világos mód">🌙/☀️</button>
+      <button id="wakeToggle" title="Képernyő ébren tartása">🔒</button> <select id="densitySelect" title="Nézet" style="border:1px solid #ccd3e0;border-radius:8px;padding:6px 8px"><option value="cozy">Tágas</option><option value="normal">Normál</option><option value="compact">Kompakt</option></select> <input id="tocSearch" type="search" placeholder="Keresés…" aria-label="Keresés">
+    </div>
+    <nav>
+      <ul class="toc">
+        <li><a href="#ex-1">1. Fekvőtámasz</a></li>
+        <li><a href="#ex-2">2. Plank</a></li>
+        <li><a href="#ex-3">3. Híd (Glute bridge)</a></li>
+        <li><a href="#ex-4">4. Pók kitörés</a></li>
+        <li><a href="#ex-5">5. Plank vállérintéssel</a></li>
+        <li><a href="#ex-6">6. Guggolás</a></li>
+        <li><a href="#ex-7">7. Oldalra kitörés</a></li>
+        <li><a href="#ex-8">8. Guggolás ugrással</a></li>
+        <li><a href="#ex-9">9. Kitörés ugrással</a></li>
+        <li><a href="#ex-10">10. Felhúzás egy lábon</a></li>
+        <li><a href="#ex-11">11. Kitörés hátrafelé</a></li>
+        <li><a href="#ex-12">12. Walkout</a></li>
+        <li>
+          <a href="#extra-programok">Kiegészítés: Programok</a>
+          <ul class="sublist">
+            <li><a href="#extra-hiit">– HIIT (30/30)</a></li>
+            <li><a href="#extra-fullbody">– Teljes test</a></li>
+            <li><a href="#extra-legs">– Láb &amp; popsi</a></li>
+          </ul>
+        </li>
+      </ul>
+    </nav>
+  </aside>
+
+  <main>
+    <div class="grid">
+      <!-- 1 -->
+      <section class="exercise" id="ex-1">
+        <h2>1. Fekvőtámasz</h2>
+        <img loading="lazy" src="01-pushup.gif" alt="Fekvőtámasz">
+        <p><b>Kiindulási testhelyzet:</b> Térdelj le, és plankolj nyújtott karokkal. A tenyereid a válladdal egy vonalban legyenek, de vállszélességnél közelebb egymáshoz. Nyomd le a vállaidat minél távolabb a füledtől, és a lapockáidat is le és hátra. A könyök 45°-os szöget zárjon be a testeddel. Feszítsd meg a törzset, és tartsd egyenesen a tested. A hát ne görbüljön, különösen a lumbális szakaszon.</p>
+        <p><b>Hogyan csináld:</b> Kilégzés közben ereszkedj le és finoman érintsd a mellkasod a padlóhoz. Belégzés közben nyomd a tenyered az edzőszőnyegbe és told vissza a tested a kiinduló helyzetbe. Ismételd.</p>
+        <details class="notes"><summary>📝 Jegyzet ehhez a gyakorlathoz</summary><textarea rows="3" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ccd3e0;border-radius:8px" placeholder="Saját jegyzetek…"></textarea></details>
+      </section>
+      <!-- 2 -->
+      <section class="exercise" id="ex-2">
+        <h2>2. Plank</h2>
+        <img loading="lazy" src="02-plank.gif" alt="Plank">
+        <p><b>Kiindulási testhelyzet:</b> Térdelj le, és plankolj nyújtott karokkal. A tenyereid a válladdal egy vonalban legyenek, de vállszélességnél közelebb egymáshoz…</p>
+        <p><b>Hogyan csináld:</b> Lélegezz nyugodtan, tartsd mozdulatlanul a tested, és próbáld tartani ezt a pozíciót néhány másodpercig.</p>
+        <details class="notes"><summary>📝 Jegyzet ehhez a gyakorlathoz</summary><textarea rows="3" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ccd3e0;border-radius:8px" placeholder="Saját jegyzetek…"></textarea></details>
+      </section>
+      <!-- 3 -->
+      <section class="exercise" id="ex-3">
+        <h2>3. Híd (Glute bridge)</h2>
+        <img loading="lazy" src="03-glute-bridge.gif" alt="Glute bridge">
+        <p><b>Kiindulási testhelyzet:</b> Feküdj a hátadra, karok a test mellett, tenyérrel lefelé. Hajlítsd be a térded, a talpak a talajon.</p>
+        <p><b>Hogyan csináld:</b> Emeld a medencét a farizom megfeszítésével, tartsd 1–2 mp-ig, majd lassan engedd vissza. Ismételd.</p>
+        <details class="notes"><summary>📝 Jegyzet ehhez a gyakorlathoz</summary><textarea rows="3" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ccd3e0;border-radius:8px" placeholder="Saját jegyzetek…"></textarea></details>
+      </section>
+      <!-- 4 -->
+      <section class="exercise" id="ex-4">
+        <h2>4. Pók kitörés (Spider lunges)</h2>
+        <img loading="lazy" src="04-spider-lunge.gif" alt="Spider lunges">
+        <p><b>Kiindulási testhelyzet:</b> Térdelj le, és plankolj nyújtott karokkal…</p>
+        <p><b>Hogyan csináld:</b> Kifújás közben lépj előre a jobb lábaddal (ideális esetben a jobb tenyérig), majd belégzésre lépj vissza. Ismételd a másik oldalra.</p>
+        <details class="notes"><summary>📝 Jegyzet ehhez a gyakorlathoz</summary><textarea rows="3" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ccd3e0;border-radius:8px" placeholder="Saját jegyzetek…"></textarea></details>
+      </section>
+      <!-- 5 -->
+      <section class="exercise" id="ex-5">
+        <h2>5. Plank vállérintéssel (Plank shoulder touch)</h2>
+        <img loading="lazy" src="05-plank-tap.gif" alt="Plank shoulder tap">
+        <p><b>Kiindulási testhelyzet:</b> Plank nyújtott karokkal, a vállak leengedve, lapockák hátrahúzva…</p>
+        <p><b>Hogyan csináld:</b> Emeld fel a jobb kezed és érintsd a bal vállad, majd csere. Közben tartsd stabilan a törzsed.</p>
+        <details class="notes"><summary>📝 Jegyzet ehhez a gyakorlathoz</summary><textarea rows="3" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ccd3e0;border-radius:8px" placeholder="Saját jegyzetek…"></textarea></details>
+      </section>
+      <!-- 6 -->
+      <section class="exercise" id="ex-6">
+        <h2>6. Guggolás</h2>
+        <img loading="lazy" src="06-squat.gif" alt="Guggolás">
+        <p><b>Kezdő pozíció:</b> Vállszéles terpesz. A testsúly a teljes talpadon oszlik el.</p>
+        <p><b>Hogyan csináld:</b> Belégzésre guggolj le (medence hátra-le), tartsd a hátad, térd-boka-lábfej egy vonalban; kilégzésre állj fel. Ismételd.</p>
+        <details class="notes"><summary>📝 Jegyzet ehhez a gyakorlathoz</summary><textarea rows="3" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ccd3e0;border-radius:8px" placeholder="Saját jegyzetek…"></textarea></details>
+      </section>
+      <!-- 7 -->
+      <section class="exercise" id="ex-7">
+        <h2>7. Oldalra kitörés (Side lunge)</h2>
+        <img loading="lazy" src="07-side-lunge.gif" alt="Side lunge">
+        <p><b>Kiindulási pozíció:</b> Közepes terpesz.</p>
+        <p><b>Hogyan csináld:</b> Belégzésre lépj oldalra és terheld az adott lábat; kilégzésre térj vissza. Ismételd másik oldalra.</p>
+        <details class="notes"><summary>📝 Jegyzet ehhez a gyakorlathoz</summary><textarea rows="3" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ccd3e0;border-radius:8px" placeholder="Saját jegyzetek…"></textarea></details>
+      </section>
+      <!-- 8 -->
+      <section class="exercise" id="ex-8">
+        <h2>8. Guggolás ugrással (Squat jump)</h2>
+        <img loading="lazy" src="08-squat-jump.gif" alt="Squat jump">
+        <p><b>Kezdő pozíció:</b> Vállszéles terpesz.</p>
+        <p><b>Hogyan csináld:</b> Belégzésre guggolj, kilégzésre ugorj fel a far- és elülső combizmok megfeszítésével; fent levegő, majd vissza a guggolásba.</p>
+        <details class="notes"><summary>📝 Jegyzet ehhez a gyakorlathoz</summary><textarea rows="3" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ccd3e0;border-radius:8px" placeholder="Saját jegyzetek…"></textarea></details>
+      </section>
+      <!-- 9 -->
+      <section class="exercise" id="ex-9">
+        <h2>9. Kitörés ugrással</h2>
+        <img loading="lazy" src="09-jumping-lunge.gif" alt="Jumping lunge">
+        <p><b>Kiindulási pozíció:</b> Közepes terpesz.</p>
+        <p><b>Hogyan csináld:</b> Lépj előre, ereszkedj le 90°-ig, majd kilégzésre ugorj és cserélj lábat. Karokkal segíthetsz a stabilitásban.</p>
+        <details class="notes"><summary>📝 Jegyzet ehhez a gyakorlathoz</summary><textarea rows="3" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ccd3e0;border-radius:8px" placeholder="Saját jegyzetek…"></textarea></details>
+      </section>
+      <!-- 10 -->
+      <section class="exercise" id="ex-10">
+        <h2>10. Felhúzás egy lábon (Single leg deadlift)</h2>
+        <img loading="lazy" src="10-single-leg-deadlift.gif" alt="Single leg deadlift">
+        <p><b>Kiindulási pozíció:</b> Közepes terpesz.</p>
+        <p><b>Hogyan csináld:</b> Testsúly az enyhén hajlított támaszlábban; belégzésre dőlj előre és nyújtsd hátra a másik lábat; kilégzésre térj vissza. Karokkal egyensúlyozz.</p>
+        <details class="notes"><summary>📝 Jegyzet ehhez a gyakorlathoz</summary><textarea rows="3" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ccd3e0;border-radius:8px" placeholder="Saját jegyzetek…"></textarea></details>
+      </section>
+      <!-- 11 -->
+      <section class="exercise" id="ex-11">
+        <h2>11. Kitörés hátrafelé</h2>
+        <img loading="lazy" src="11-reverse-lunge.gif" alt="Reverse lunge">
+        <p><b>Kiindulási pozíció:</b> Közepes terpesz.</p>
+        <p><b>Gyakorlat:</b> Lépj hátra és belégzés közben ereszkedj le, a hátsó térd finoman érintse a talajt; kilégzésre vissza. Ismételd másik lábbal is.</p>
+        <details class="notes"><summary>📝 Jegyzet ehhez a gyakorlathoz</summary><textarea rows="3" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ccd3e0;border-radius:8px" placeholder="Saját jegyzetek…"></textarea></details>
+      </section>
+      <!-- 12 -->
+      <section class="exercise" id="ex-12">
+        <h2>12. Walkout</h2>
+        <img loading="lazy" src="12-walkout.gif" alt="Walkout">
+        <p><b>Kiindulási pozíció:</b> Közepes terpesz.</p>
+        <p><b>Gyakorlat:</b> Belégzésre hajolj előre és sétálj ki plankig, toltd el magad és térj vissza a kiinduló helyzetbe. Egyenesíts és ismételd.</p>
+        <details class="notes"><summary>📝 Jegyzet ehhez a gyakorlathoz</summary><textarea rows="3" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ccd3e0;border-radius:8px" placeholder="Saját jegyzetek…"></textarea></details>
+      </section>
+
+      <!-- Extra programs -->
+      <section class="exercise" id="extra-programok">
+        <h2>Kiegészítés: Edzésprogramok</h2>
+
+        <h3 id="extra-hiit">1. Saját testsúlyos HIIT a jobb fizikai erőnlétért</h3>
+        <p><b>Protokoll:</b> 30 mp mozgás + 30 mp pihenő, 3–5 kör, körök között 60–90 mp pihenő.</p>
+        <ol>
+          <li>Walkout</li><li>Guggolás ugrással</li><li>Plank vállérintéssel</li><li>Pók kitörés</li><li>Kitörés ugrással</li>
+        </ol>
+
+        <h3 id="extra-fullbody">2. Teljes testet átfogó saját testsúlyos edzés</h3>
+        <p>Előbb egy gyakorlat összes sorozata, majd a következő. Pihenő 1–2 perc.</p>
+        <table style="width:100%;border-collapse:collapse;margin:8px 0">
+          <thead><tr><th style="border:1px solid #ccd3e0;padding:6px 8px;background:#f3f6fb">Gyakorlat</th><th style="border:1px solid #ccd3e0;padding:6px 8px;background:#f3f6fb">Ismétlés</th><th style="border:1px solid #ccd3e0;padding:6px 8px;background:#f3f6fb">Sorozat</th></tr></thead>
+          <tbody>
+            <tr><td style="border:1px solid #ccd3e0;padding:6px 8px">Walkout</td><td style="border:1px solid #ccd3e0;padding:6px 8px">5–10</td><td style="border:1px solid #ccd3e0;padding:6px 8px">3–5</td></tr>
+            <tr><td style="border:1px solid #ccd3e0;padding:6px 8px">Guggolás ugrással</td><td style="border:1px solid #ccd3e0;padding:6px 8px">8–12</td><td style="border:1px solid #ccd3e0;padding:6px 8px">3–5</td></tr>
+            <tr><td style="border:1px solid #ccd3e0;padding:6px 8px">Kitörés hátrafelé</td><td style="border:1px solid #ccd3e0;padding:6px 8px">10–12/láb</td><td style="border:1px solid #ccd3e0;padding:6px 8px">3–5</td></tr>
+            <tr><td style="border:1px solid #ccd3e0;padding:6px 8px">Fekvőtámasz</td><td style="border:1px solid #ccd3e0;padding:6px 8px">8–12</td><td style="border:1px solid #ccd3e0;padding:6px 8px">3–5</td></tr>
+            <tr><td style="border:1px solid #ccd3e0;padding:6px 8px">Plank</td><td style="border:1px solid #ccd3e0;padding:6px 8px">30–60 mp</td><td style="border:1px solid #ccd3e0;padding:6px 8px">3–5</td></tr>
+            <tr><td style="border:1px solid #ccd3e0;padding:6px 8px">Pók kitörés</td><td style="border:1px solid #ccd3e0;padding:6px 8px">8–12/láb</td><td style="border:1px solid #ccd3e0;padding:6px 8px">3–5</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="extra-legs">3. Saját testsúlyos gyakorlatok lábra és popsira</h3>
+        <p>Előbb egy gyakorlat összes sorozata, majd a következő. Pihenő 1–2 perc.</p>
+        <table style="width:100%;border-collapse:collapse;margin:8px 0">
+          <thead><tr><th style="border:1px solid #ccd3e0;padding:6px 8px;background:#f3f6fb">Gyakorlat</th><th style="border:1px solid #ccd3e0;padding:6px 8px;background:#f3f6fb">Ismétlés</th><th style="border:1px solid #ccd3e0;padding:6px 8px;background:#f3f6fb">Sorozat</th></tr></thead>
+          <tbody>
+            <tr><td style="border:1px solid #ccd3e0;padding:6px 8px">Híd (Glute bridge)</td><td style="border:1px solid #ccd3e0;padding:6px 8px">12–20</td><td style="border:1px solid #ccd3e0;padding:6px 8px">3–5</td></tr>
+            <tr><td style="border:1px solid #ccd3e0;padding:6px 8px">Felhúzás egy lábon</td><td style="border:1px solid #ccd3e0;padding:6px 8px">8–12/láb</td><td style="border:1px solid #ccd3e0;padding:6px 8px">3–5</td></tr>
+            <tr><td style="border:1px solid #ccd3e0;padding:6px 8px">Váltott kitörés ugrással</td><td style="border:1px solid #ccd3e0;padding:6px 8px">12–16</td><td style="border:1px solid #ccd3e0;padding:6px 8px">3–5</td></tr>
+            <tr><td style="border:1px solid #ccd3e0;padding:6px 8px">Guggolás</td><td style="border:1px solid #ccd3e0;padding:6px 8px">12–20</td><td style="border:1px solid #ccd3e0;padding:6px 8px">3–5</td></tr>
+            <tr><td style="border:1px solid #ccd3e0;padding:6px 8px">Váltakozó oldalirányú kitörés</td><td style="border:1px solid #ccd3e0;padding:6px 8px">12–20</td><td style="border:1px solid #ccd3e0;padding:6px 8px">3–5</td></tr>
+          </tbody>
+        </table>
+
+        <details class="notes"><summary>📝 Jegyzet ehhez a kiegészítéshez</summary><textarea rows="3" style="width:100%;margin-top:8px;padding:8px;border:1px solid #ccd3e0;border-radius:8px" placeholder="Saját jegyzetek…"></textarea></details>
+      </section>
+    </div>
+
+    <p class="note">Tipp: a képekre vagy kártyára kattintva nagy nézet nyílik (nyilak, ←/→ és <i>swipe</i>). A videók csak látható állapotban futnak.</p>
+  </main>
+</div>
+
+<!-- Lightboxok -->
+<div class="lightbox" id="cardLb" aria-modal="true" role="dialog">
+  <div class="lightbox-content" id="cardContent"></div>
+  <button class="lb-close" id="cardClose">✕</button>
+  <div class="lb-nav">
+    <button id="cardPrev">◀</button>
+    <button id="cardNext">▶</button>
+  </div>
+</div>
+
+<div class="lightbox" id="imgLb" aria-modal="true" role="dialog">
+  <div class="lightbox-content"><img id="imgLbImg" alt=""></div>
+  <button class="lb-close" id="imgClose">✕</button>
+  <div class="lb-nav">
+    <button id="imgPrev">◀</button>
+    <button id="imgNext">▶</button>
+  </div>
+</div>
+
+<!-- Timer UI -->
+<button class="timer-toggle" id="timerToggle" aria-expanded="false" title="Időzítő megnyitása">⏱️ Időzítő</button>
+<div class="timer-panel" id="timerPanel" role="dialog" aria-label="Edzés időzítők">
+  <div class="timer-header">
+    <button class="timer-tab active" data-tab="emom">EMOM</button>
+    <button class="timer-tab" data-tab="amrap">AMRAP</button>
+    <button class="timer-tab" data-tab="tabata">Tabata</button>
+    <button class="timer-tab" data-tab="rest">Pihenő</button>
+  </div>
+  <div class="timer-body active" id="tab-emom">
+    <div class="timer-row"><label>Perc (összes): <input id="emomMinutes" type="number" min="1" value="10"></label><label>Munkasz. (mp): <input id="emomWork" type="number" min="1" value="40"></label></div>
+    <div class="timer-display" id="emomDisplay">10:00</div>
+    <div class="rounds" id="emomRounds">Kör: 0 / 10</div>
+    <div class="timer-controls"><button id="emomStart">Start</button><button id="emomPause">Szünet</button><button id="emomReset">Reset</button></div>
+  </div>
+  <div class="timer-body" id="tab-amrap">
+    <div class="timer-row"><label>Idő (perc): <input id="amrapMinutes" type="number" min="1" value="12"></label></div>
+    <div class="timer-display" id="amrapDisplay">12:00</div>
+    <div class="rounds">Körök: <span id="amrapRounds">0</span> <button id="amrapAdd" style="margin-left:8px;">+1 kör</button></div>
+    <div class="timer-controls"><button id="amrapStart">Start</button><button id="amrapPause">Szünet</button><button id="amrapReset">Reset</button></div>
+  </div>
+  <div class="timer-body" id="tab-tabata">
+    <div class="timer-row"><label>Munka (mp): <input id="tabataWork" type="number" min="1" value="20"></label><label>Pihenő (mp): <input id="tabataRest" type="number" min="1" value="10"></label></div>
+    <div class="timer-row"><label>Körök: <input id="tabataRounds" type="number" min="1" value="8"></label></div>
+    <div class="timer-display" id="tabataDisplay">00:20</div>
+    <div class="rounds" id="tabataRoundLbl">Kör: 1 / 8 – Munka</div>
+    <div class="timer-controls"><button id="tabataStart">Start</button><button id="tabataPause">Szünet</button><button id="tabataReset">Reset</button></div>
+  </div>
+  <div class="timer-body" id="tab-rest">
+    <div class="timer-row"><label>Pihenő (mp): <input id="restSeconds" type="number" min="1" value="60"></label></div>
+    <div class="timer-display" id="restDisplay">01:00</div>
+    <div class="timer-controls"><button id="restStart">Start</button><button id="restPause">Szünet</button><button id="restReset">Reset</button></div>
+  </div>
+</div>
+
+<script>
+  /* === Exclusive TOC highlight (fő + al) === */
+  const sections = Array.from(document.querySelectorAll('.exercise'));
+  const subAnchors = ['extra-hiit','extra-fullbody','extra-legs'].map(id => document.getElementById(id)).filter(Boolean);
+  const highlightTargets = sections.concat(subAnchors);
+  const tocLinks = Array.from(document.querySelectorAll('.toc a'));
+  const linkById = Object.fromEntries(tocLinks.map(a => [a.getAttribute('href').slice(1), a]));
+  function setActiveLink(id){ tocLinks.forEach(a=>a.classList.remove('active')); const el=linkById[id]; if(el) el.classList.add('active'); }
+  function chooseActive(){
+    let best=null, bestDist=Infinity;
+    highlightTargets.forEach(el=>{
+      const r=el.getBoundingClientRect();
+      if (r.bottom<=0 || r.top>window.innerHeight*0.8) return;
+      const d=Math.abs(r.top-80);
+      if(d<bestDist){bestDist=d; best=el;}
+    });
+    if(best) setActiveLink(best.id);
+  }
+  let rafPending=false;
+  function onScroll(){ if(rafPending) return; rafPending=true; requestAnimationFrame(()=>{rafPending=false; chooseActive();}); }
+  window.addEventListener('scroll', onScroll, {passive:true});
+  window.addEventListener('resize', onScroll, {passive:true});
+  document.addEventListener('DOMContentLoaded', chooseActive);
+  window.addEventListener('load', chooseActive);
+  document.querySelector('.toc')?.addEventListener('click', e=>{ const a=e.target.closest('a[href^="#"]'); if(!a) return; const id=a.getAttribute('href').slice(1); setTimeout(()=>setActiveLink(id), 50); });
+
+  /* === Dark mode / Search / Notes === */
+  const densitySelect=document.getElementById('densitySelect');
+  const savedDensity=localStorage.getItem('density')||document.body.getAttribute('data-density')||'cozy';
+  document.body.setAttribute('data-density', savedDensity);
+  if(densitySelect){ densitySelect.value=savedDensity; densitySelect.addEventListener('change', ()=>{
+    const d=densitySelect.value||'normal'; document.body.setAttribute('data-density', d); localStorage.setItem('density', d);
+  }); }
+  const themeToggle=document.getElementById('themeToggle');
+  const savedTheme=localStorage.getItem('theme'); if(savedTheme) document.body.setAttribute('data-theme', savedTheme);
+  themeToggle?.addEventListener('click', ()=>{ const now=document.body.getAttribute('data-theme')==='dark'?'light':'dark'; document.body.setAttribute('data-theme', now); localStorage.setItem('theme', now); });
+  const tocSearch=document.getElementById('tocSearch');
+  function norm(s){ return (s||'').toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu,''); }
+  tocSearch?.addEventListener('input', ()=>{
+    const q=norm(tocSearch.value);
+    sections.forEach(sec=>{ const t=norm(sec.innerText); sec.style.display=t.includes(q)?'':''; });
+    tocLinks.forEach(a=>{ const t=norm(a.innerText); a.parentElement.style.display=t.includes(q)?'':''; });
+  });
+  sections.forEach(sec=>{ const id=sec.id; const ta=sec.querySelector('textarea'); if(!ta) return; const key='note_'+id; ta.value=localStorage.getItem(key)||''; ta.addEventListener('input', ()=>localStorage.setItem(key, ta.value)); });
+
+  /* === Lightbox (kártya + kép/videó) === */
+  const cardLb=document.getElementById('cardLb'), cardContent=document.getElementById('cardContent');
+  const cardPrev=document.getElementById('cardPrev'), cardNext=document.getElementById('cardNext'), cardClose=document.getElementById('cardClose');
+  const imgLb=document.getElementById('imgLb'), imgPrev=document.getElementById('imgPrev'), imgNext=document.getElementById('imgNext'), imgClose=document.getElementById('imgClose');
+  let currentIndex=-1, currentType=null;
+  function fadeSwap(el, update, dur=200){ el.style.opacity='0'; setTimeout(()=>{update();requestAnimationFrame(()=>{el.style.opacity='1';});}, dur); }
+  function openCard(index, animate=false){
+      // Close image lightbox if open
+      imgLb.classList.remove('open');
+    const update=()=>{ cardContent.innerHTML=sections[index].innerHTML; cardContent.querySelectorAll('video').forEach(v=>{ v.setAttribute('controls',''); v.removeAttribute('muted'); v.pause(); }); };
+    if(animate && cardLb.classList.contains('open')) fadeSwap(cardContent, update); else update();
+    cardLb.classList.add('open'); currentIndex=index; currentType='card';
+  }
+  function openImg(index, animate=false){
+      // Close card lightbox if open
+      cardLb.classList.remove('open');
+    const container = imgLb.querySelector('.lightbox-content');
+    const update=()=>{
+      container.innerHTML='';
+      const srcEl = sections[index].querySelector('video, img');
+      if (srcEl && srcEl.tagName.toLowerCase()==='video'){
+        const temp=document.createElement('video'); temp.setAttribute('controls',''); temp.style.maxWidth='95vw'; temp.style.maxHeight='90vh'; temp.style.borderRadius='12px';
+        temp.innerHTML = srcEl.innerHTML; container.appendChild(temp); temp.play().catch(()=>{});
+      } else {
+        const src = sections[index].querySelector('img')?.src || '';
+        const im=document.createElement('img'); im.id='imgLbImg'; im.src=src; im.alt=''; im.style.maxWidth='95vw'; im.style.maxHeight='90vh'; im.style.borderRadius='12px'; im.style.display='block'; im.style.margin='auto';
+        container.appendChild(im);
+      }
+    };
+    if(animate && imgLb.classList.contains('open')) fadeSwap(container, update); else update();
+    imgLb.classList.add('open'); currentIndex=index; currentType='img';
+  }
+  function closeAll(){ cardLb.classList.remove('open'); imgLb.classList.remove('open'); currentIndex=-1; currentType=null; }
+  function navigate(step){ if(currentIndex===-1) return; let i=currentIndex+step; if(i<0) i=sections.length-1; if(i>=sections.length) i=0; if(currentType==='card') openCard(i,true); else openImg(i,true); }
+  cardPrev.addEventListener('click', e=>{e.preventDefault();e.stopPropagation();navigate(-1)});
+  cardNext.addEventListener('click', e=>{e.preventDefault();e.stopPropagation();navigate(1)});
+  imgPrev.addEventListener('click', e=>{e.preventDefault();e.stopPropagation();navigate(-1)});
+  imgNext.addEventListener('click', e=>{e.preventDefault();e.stopPropagation();navigate(1)});
+  cardClose.addEventListener('click', e=>{e.preventDefault();e.stopPropagation();closeAll()});
+  imgClose.addEventListener('click', e=>{e.preventDefault();e.stopPropagation();closeAll()});
+  cardLb.addEventListener('click', e=>{ if(e.target===cardLb) closeAll(); });
+  imgLb.addEventListener('click', e=>{ if(e.target===imgLb) closeAll(); });
+
+  // Prevent background click handler from triggering when clicking inside lightbox content
+  cardLb.querySelector('.lightbox-content')?.addEventListener('click', (e)=>{ e.stopPropagation(); }, true);
+  imgLb.querySelector('.lightbox-content')?.addEventListener('click', (e)=>{ e.stopPropagation(); }, true);
+
+  document.addEventListener('click', e=>{
+    const inAside=e.target.closest('aside'); if(inAside) return;
+    const onMedia=e.target.closest('.exercise img, .exercise video');
+    const onCard=e.target.closest('.exercise');
+    if(onMedia){ const idx=sections.indexOf(onMedia.closest('.exercise')); openImg(idx); return; }
+    if(onCard){ const idx=sections.indexOf(onCard); openCard(idx); }
+  });
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeAll(); if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&currentType && (cardLb.classList.contains('open')||imgLb.classList.contains('open'))) navigate(e.key==='ArrowLeft'?-1:1); });
+  function addSwipeHandlers(overlay){
+    let startX=0,startY=0,dx=0,dy=0,sw=false;
+    function s(evt){ const t=(evt.touches&&evt.touches[0])||evt; startX=t.clientX; startY=t.clientY; dx=dy=0; sw=false; }
+    function m(evt){ const t=(evt.touches&&evt.touches[0])||evt; dx=t.clientX-startX; dy=t.clientY-startY; if(!sw&&Math.abs(dx)>15&&Math.abs(dx)>Math.abs(dy)) sw=true; if(sw) evt.preventDefault(); }
+    function e(evt){ if(!sw) return; if(Math.abs(dx)>60) navigate(dx<0?1:-1); sw=false; dx=dy=0; }
+    overlay.addEventListener('touchstart', s, {passive:true}); overlay.addEventListener('touchmove', m, {passive:false}); overlay.addEventListener('touchend', e, {passive:true});
+  }
+  addSwipeHandlers(cardLb); addSwipeHandlers(imgLb);
+
+  /* === GIF -> VIDEO enhancement + pause-offscreen === */
+  function enhanceMedia(){
+    document.querySelectorAll('.exercise img[loading="lazy"]').forEach(img=>{
+      const src=img.getAttribute('src')||'';
+      if(!/\.gif($|\?)/i.test(src)) return;
+      const base=src.replace(/\.gif(\?.*)?$/i,'');
+      const video=document.createElement('video');
+      video.autoplay=true; video.loop=true; video.muted=true; video.playsInline=true;
+      video.setAttribute('preload','none');
+      video.innerHTML = `<source src="${base}.webm" type="video/webm"><source src="${base}.mp4" type="video/mp4">`;
+      video.style.borderRadius = img.style.borderRadius || '12px';
+      video.addEventListener('canplay', ()=>{ try{ img.replaceWith(video); }catch(e){} });
+    });
+  }
+  enhanceMedia();
+  const mediaObserver = new IntersectionObserver((entries)=>{
+    entries.forEach(en=>{
+      const el=en.target;
+      if(el.tagName.toLowerCase()==='video'){
+        if(en.isIntersecting){ el.play().catch(()=>{}); } else { el.pause(); }
+      }
+    });
+  }, {threshold:0.25});
+  function attachMediaObserver(){ document.querySelectorAll('.exercise video').forEach(v=>mediaObserver.observe(v)); }
+  attachMediaObserver();
+  const mo = new MutationObserver(()=>attachMediaObserver()); mo.observe(document.body, {childList:true, subtree:true});
+  document.addEventListener('visibilitychange', ()=>{
+    const vids=document.querySelectorAll('.exercise video');
+    vids.forEach(v=>{ if(document.hidden) v.pause(); else { const r=v.getBoundingClientRect(); if(r.top<window.innerHeight && r.bottom>0) v.play().catch(()=>{}); } });
+  });
+
+  /* === Időzítő panel === */
+  /* === Wake Lock === */
+  const wakeToggle = document.getElementById('wakeToggle');
+  let wakeLock = null;
+  // iOS fallback using tiny inline MP4 (playsinline, muted, loop)
+  const iOSNoSleep = (() => {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+    let video = null;
+    function enable(){
+      if (!isIOS) return;
+      if (!video){
+        video = document.createElement('video');
+        video.setAttribute('playsinline','');
+        video.setAttribute('muted','');
+        video.muted = true;
+        video.loop = true;
+        video.style.position='fixed'; video.style.width='1px'; video.style.height='1px'; video.style.opacity='0'; video.style.pointerEvents='none'; video.style.bottom='0'; video.style.left='0'; video.style.zIndex='-1';
+        // 1s silent mp4 (base64) — courtesy of NoSleep-like approach
+        video.src = "data:video/mp4;base64,AAAAIGZ0eXBtcDQyAAAAAG1wNDFtcDQyaXNvbWF2YzEAAAAIZnJlZQAABiBtZGF0AAACAw==";
+        // Note: the above is a super tiny invalid stream on some browsers; append a valid one
+        // Provide a tiny valid loop too (longer base64). If the short one fails, on 'error' swap to the long one.
+        video.addEventListener('error', () => {
+          video.src = "data:video/mp4;base64,AAAAGGZ0eXBtcDQyAAAAAGlzb21pc28yYXZjMQAAAPhtb292AAAAbG12aGQAAAAAAAAAAAAAAAAAAAPoAAAB9wABAAABAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAABobWRoAAAAAAAAAAEAAAAQAAAB9wAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAABAAAAAAABAAAAAAAACAAACG1pbmYAAAAUdm1oZAAAAAEAAAAQAAAADAAAAAAFAAAACG12ZXhwAAAAAQAAAAEAAAAAAQAAAAEAAABUYXZjQ29kZUFjYy0xLjYuMHZpZGVvAAAAEm1kYXQAAAAYZkABGAABHgAABxgAAAEfAAAAAg==";
+        }, { once: true });
+        document.body.appendChild(video);
+      }
+      video.play().catch(()=>{});
+    }
+    function disable(){ if (video){ try{ video.pause(); }catch(e){} } }
+    return { enable, disable, isIOS };
+  })();
+
+  async function requestWakeLock(){
+    try{
+      if ('wakeLock' in navigator && navigator.wakeLock.request){
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeToggle.classList.remove('active'); localStorage.setItem('wake','off'); });
+      } else if (iOSNoSleep.isIOS){
+        iOSNoSleep.enable();
+      }
+      wakeToggle.classList.add('active');
+      localStorage.setItem('wake','on');
+    }catch(e){
+      console.warn('WakeLock error', e);
+      // Fallback to iOS trick if possible
+      if (iOSNoSleep.isIOS){ iOSNoSleep.enable(); wakeToggle.classList.add('active'); localStorage.setItem('wake','on'); }
+    }
+  }
+  async function releaseWakeLock(){
+    try{
+      if (wakeLock) { await wakeLock.release(); wakeLock = null; }
+      iOSNoSleep.disable();
+    }catch(e){}
+    wakeToggle.classList.remove('active');
+    localStorage.setItem('wake','off');
+  }
+  wakeToggle?.addEventListener('click', () => {
+    const on = wakeToggle.classList.toggle('active');
+    if (on) requestWakeLock(); else releaseWakeLock();
+  });
+  // Reacquire on visibility change (Android/desktop supports WakeLock API)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && (localStorage.getItem('wake')==='on')) {
+      requestWakeLock();
+    }
+  });
+  // Restore previous state
+  if (localStorage.getItem('wake')==='on') { requestWakeLock(); }
+
+  const timerToggle=document.getElementById('timerToggle');
+  const timerPanel=document.getElementById('timerPanel');
+  timerToggle.addEventListener('click', ()=>{
+    const open = !timerPanel.classList.contains('open');
+    timerPanel.classList.toggle('open', open);
+    timerToggle.setAttribute('aria-expanded', String(open));
+  });
+  document.querySelectorAll('.timer-tab').forEach(btn=>btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.timer-tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.timer-body').forEach(x=>x.classList.remove('active'));
+    btn.classList.add('active'); document.getElementById('tab-'+btn.dataset.tab).classList.add('active');
+  }));
+
+  // Hang + rezgés
+  function beep(pattern='single'){
+    try{
+      if (navigator.vibrate) {
+        if(pattern==='triple') navigator.vibrate([60,60,60,60,60]);
+        else if(pattern==='double') navigator.vibrate([80,60,80]);
+        else navigator.vibrate(100);
+      }
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator(); const g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.type='sine'; o.frequency.value = (pattern==='triple'?1000:(pattern==='double'?900:800));
+      g.gain.setValueAtTime(0.001, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime+0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.18);
+      o.start(); o.stop(ctx.currentTime+0.2);
+    }catch(e){}
+  }
+  const mmss=(t)=>{const m=Math.floor(t/60).toString().padStart(2,'0'); const s=Math.floor(t%60).toString().padStart(2,'0'); return `${m}:${s}`;};
+
+  // EMOM
+  let emomTimer=null, emomLeft=0, emomTotal=0, emomRound=0;
+  const emomMinutes=document.getElementById('emomMinutes'), emomWork=document.getElementById('emomWork');
+  const emomDisplay=document.getElementById('emomDisplay'), emomRounds=document.getElementById('emomRounds');
+  function emomUpdate(){ emomDisplay.textContent = mmss(emomLeft); emomRounds.textContent = `Kör: ${emomRound} / ${Math.max(1, parseInt(emomMinutes.value||'1'))}`; }
+  function emomTick(){
+    if(emomLeft<=0){
+      emomRound++; if(emomRound>parseInt(emomMinutes.value||'1')){ clearInterval(emomTimer); emomTimer=null; beep('double'); return; }
+      emomLeft=60; emomTotal--; beep();
+    } else { emomLeft--; emomTotal--; }
+    const work=parseInt(emomWork.value||'40'); const secInMinute = 60 - emomLeft; if([work,work-1,work-2].includes(secInMinute)) beep('triple');
+    emomUpdate(); if (emomTotal<=0){ clearInterval(emomTimer); emomTimer=null; beep('double'); }
+  }
+  document.getElementById('emomStart').addEventListener('click', ()=>{ if(emomTimer) return; const mins=Math.max(1, parseInt(emomMinutes.value||'1')); emomRound=0; emomLeft=0; emomTotal=mins*60; emomUpdate(); emomTimer=setInterval(emomTick,1000); });
+  document.getElementById('emomPause').addEventListener('click', ()=>{ if(emomTimer){ clearInterval(emomTimer); emomTimer=null; } else { emomTimer=setInterval(emomTick,1000); } });
+  document.getElementById('emomReset').addEventListener('click', ()=>{ clearInterval(emomTimer); emomTimer=null; emomRound=0; emomLeft=0; emomTotal=0; const t=parseInt(emomMinutes.value||'1')*60; emomDisplay.textContent=mmss(t); emomRounds.textContent=`Kör: 0 / ${parseInt(emomMinutes.value||'1')}`; });
+
+  // AMRAP
+  let amrapTimer=null, amrapLeft=0, amrapRounds=0;
+  const amrapMinutes=document.getElementById('amrapMinutes'), amrapDisplay=document.getElementById('amrapDisplay'), amrapRoundsLbl=document.getElementById('amrapRounds');
+  document.getElementById('amrapAdd').addEventListener('click', ()=>{ amrapRounds++; amrapRoundsLbl.textContent=String(amrapRounds); });
+  function amrapTick(){ if(amrapLeft<=0){ clearInterval(amrapTimer); amrapTimer=null; beep('double'); } else { amrapLeft--; amrapDisplay.textContent=mmss(amrapLeft); if(amrapLeft<=3) beep('triple'); } }
+  document.getElementById('amrapStart').addEventListener('click', ()=>{ if(amrapTimer) return; amrapRounds=0; amrapRoundsLbl.textContent='0'; amrapLeft = Math.max(1, parseInt(amrapMinutes.value||'1'))*60; amrapDisplay.textContent=mmss(amrapLeft); amrapTimer=setInterval(amrapTick,1000); });
+  document.getElementById('amrapPause').addEventListener('click', ()=>{ if(amrapTimer){ clearInterval(amrapTimer); amrapTimer=null; } else { amrapTimer=setInterval(amrapTick,1000); } });
+  document.getElementById('amrapReset').addEventListener('click', ()=>{ clearInterval(amrapTimer); amrapTimer=null; amrapRounds=0; amrapRoundsLbl.textContent='0'; const t=Math.max(1, parseInt(amrapMinutes.value||'1'))*60; amrapLeft=t; amrapDisplay.textContent=mmss(t); });
+
+  // TABATA
+  let tabTimer=null, tabLeft=0, tabRound=1, tabIsWork=true, tabTotalRounds=8;
+  const tabWork=document.getElementById('tabataWork'), tabRest=document.getElementById('tabataRest'), tabRounds=document.getElementById('tabataRounds');
+  const tabDisplay=document.getElementById('tabataDisplay'), tabLbl=document.getElementById('tabataRoundLbl');
+  function tabUpdate(){ tabDisplay.textContent=mmss(tabLeft); tabLbl.textContent = `Kör: ${tabRound} / ${tabTotalRounds} – ${tabIsWork?'Munka':'Pihenő'}`; }
+  function tabTick(){
+    if(tabLeft<=0){
+      if(tabIsWork){ beep('double'); tabIsWork=false; tabLeft = Math.max(1, parseInt(tabRest.value||'10')); }
+      else { tabRound++; if(tabRound>tabTotalRounds){ clearInterval(tabTimer); tabTimer=null; beep('double'); return; } tabIsWork=true; tabLeft = Math.max(1, parseInt(tabWork.value||'20')); beep(); }
+    } else { tabLeft--; }
+    if(tabLeft<=3) beep('triple'); tabUpdate();
+  }
+  document.getElementById('tabataStart').addEventListener('click', ()=>{ if(tabTimer) return; tabRound=1; tabIsWork=true; tabTotalRounds=Math.max(1, parseInt(tabRounds.value||'8')); tabLeft = Math.max(1, parseInt(tabWork.value||'20')); tabUpdate(); tabTimer=setInterval(tabTick,1000); });
+  document.getElementById('tabataPause').addEventListener('click', ()=>{ if(tabTimer){ clearInterval(tabTimer); tabTimer=null; } else { tabTimer=setInterval(tabTick,1000); } });
+  document.getElementById('tabataReset').addEventListener('click', ()=>{ clearInterval(tabTimer); tabTimer=null; tabRound=1; tabIsWork=true; tabTotalRounds=Math.max(1, parseInt(tabRounds.value||'8')); tabLeft = Math.max(1, parseInt(tabWork.value||'20')); tabUpdate(); });
+
+  // REST
+  let restTimer=null, restLeft=0;
+  const restSeconds=document.getElementById('restSeconds'), restDisplay=document.getElementById('restDisplay');
+  function restTick(){ if(restLeft<=0){ clearInterval(restTimer); restTimer=null; beep('double'); } else { restLeft--; restDisplay.textContent=mmss(restLeft); if(restLeft<=3) beep('triple'); } }
+  document.getElementById('restStart').addEventListener('click', ()=>{ if(restTimer) return; restLeft=Math.max(1, parseInt(restSeconds.value||'60')); restDisplay.textContent=mmss(restLeft); restTimer=setInterval(restTick,1000); });
+  document.getElementById('restPause').addEventListener('click', ()=>{ if(restTimer){ clearInterval(restTimer); restTimer=null; } else { restTimer=setInterval(restTick,1000); } });
+  document.getElementById('restReset').addEventListener('click', ()=>{ clearInterval(restTimer); restTimer=null; const t=Math.max(1, parseInt(restSeconds.value||'60')); restLeft=t; restDisplay.textContent=mmss(t); });
+</script>
+
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(console.error);
+    });
+  }
+</script>
+
+</body>
+</html>
